@@ -2,12 +2,13 @@
   "name": "freebot-v11",
   "version": "1.0.0",
   "description": "Freebot Baileys Bot",
-  "main": "index.js",
+  "main": "shever.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node shever.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "@whiskeysockets/baileys": "github:seiren-primrose/PL-Baileys"
+    "@whiskeysockets/baileys": "github:seiren-primrose/PL-Baileys",
+    "pino": "^8.14.1"
   }
 }
