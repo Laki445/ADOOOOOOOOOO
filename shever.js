@@ -1,41 +1,54 @@
 const express = require('express');
+const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const pino = require('pino');
 const app = express();
-const port = process.env.PORT || 3000;
-const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, makeWALegacySocket, makeInMemoryStore, DisconnectReason, fetchLatestBaileysVersion, delay } = require('@whiskeysockets/baileys');
+const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname, 'public'))); // for serving frontend
+app.use(express.static('public'));
 
-// ✨ Pairing code API route
+const sessions = new Map();
+
 app.get('/code', async (req, res) => {
-    let number = req.query.number;
-    if (!number) return res.status(400).json({ error: 'Missing number' });
+  let { number } = req.query;
+  if (!number) return res.send({ error: true, message: 'Phone number is missing' });
 
-    try {
-        const { state, saveCreds } = await useMultiFileAuthState(`./session/${number}`);
-        const sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: false,
-            browser: ['FreeBot', 'Chrome', '1.0.0'],
-        });
+  if (sessions.has(number)) {
+    return res.send({ code: sessions.get(number) });
+  }
 
-        await delay(1000);
-        const code = await sock.requestPairingCode(number + '@s.whatsapp.net');
+  const { state, saveCreds } = await useMultiFileAuthState(`./session-${number}`);
+  const { version } = await fetchLatestBaileysVersion();
 
-        console.log(`[✅] Pair code for ${number}: ${code}`);
-        res.json({ code });
-    } catch (err) {
-        console.error(`[❌] Error generating code:`, err);
-        res.status(500).json({ error: 'Failed to generate code' });
+  const sock = makeWASocket({
+    version,
+    logger: pino({ level: 'silent' }),
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+    },
+    printQRInTerminal: false,
+    generateHighQualityLinkPreview: true,
+  });
+
+  sock.ev.on('connection.update', (update) => {
+    const { qr, connection, lastDisconnect } = update;
+
+    if (qr) {
+      sessions.set(number, qr);
+      setTimeout(() => sessions.delete(number), 60 * 1000); // Remove after 1 min
+      res.send({ code: qr });
     }
+
+    if (connection === 'open') {
+      console.log(`✅ WhatsApp connected for ${number}`);
+    }
+
+    if (connection === 'close') {
+      console.log(`❌ Disconnected from ${number}`);
+    }
+  });
+
+  sock.ev.on('creds.update', saveCreds);
 });
 
-// Default route for home page
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'pair.html'));
-});
-
-// Start the server
-app.listen(port, () => {
-    console.log(`✅ FreeBot V11 Server running at http://localhost:${port}`);
-});
+app.listen(PORT, () => console.log(`✅ Server started on port ${PORT}`));
