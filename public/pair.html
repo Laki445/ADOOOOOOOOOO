@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><title>FreeBot Pair</title></head>
+<body style="text-align:center;padding-top:50px;">
+<h1>FreeBot V11</h1>
+<p>Enter Your Number</p>
+<input id="number" placeholder="94771234567" />
+<button onclick="getCode()">Get Code</button>
+<p id="code"></p>
+<script>
+async function getCode() {
+  const number = document.getElementById("number").value;
+  const res = await fetch("/code?number=" + number);
+  const data = await res.json();
+  document.getElementById("code").innerText = "CODE: " + data.code;
+}
+</script>
+</body></html>
